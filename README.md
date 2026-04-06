@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/denis-platonov/qtm4j-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/denis-platonov/qtm4j-mcp-server/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/%40denis-platonov%2Fqtm4j-mcp-server)](https://www.npmjs.com/package/@denis-platonov/qtm4j-mcp-server)
-[![Release](https://img.shields.io/github/v/release/denis-platonov/qtm4j-mcp-server)](https://github.com/denis-platonov/qtm4j-mcp-server/releases)
+[![Release](https://img.shields.io/badge/release-none-lightgrey)](https://github.com/denis-platonov/qtm4j-mcp-server/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 MCP server for **QTM4J** (QMetry Test Management for Jira) Open API at `qtmcloud.qmetry.com/rest/api/latest`.
