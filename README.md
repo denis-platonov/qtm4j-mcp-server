@@ -1,5 +1,10 @@
 # qtm4j-mcp-server
 
+[![CI](https://github.com/denis-platonov/qtm4j-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/denis-platonov/qtm4j-mcp-server/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/%40denis-platonov%2Fqtm4j-mcp-server)](https://www.npmjs.com/package/@denis-platonov/qtm4j-mcp-server)
+[![Release](https://img.shields.io/github/v/release/denis-platonov/qtm4j-mcp-server)](https://github.com/denis-platonov/qtm4j-mcp-server/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 MCP server for **QTM4J** (QMetry Test Management for Jira) Open API at `qtmcloud.qmetry.com/rest/api/latest`.
 
 Published package: `@denis-platonov/qtm4j-mcp-server`
@@ -231,6 +236,24 @@ You can then verify discovery with:
 
 ```bash
 curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.denis-platonov/qtm4j"
+```
+
+### GitHub Actions
+
+This repo includes two workflows:
+
+- `CI`: runs `npm run build`, `npm run test:run`, and `npm run test:coverage` on pushes to `main` and on pull requests
+- `Release`: runs on tags matching `v*`, verifies the tag matches `package.json` and `server.json`, publishes to npm, and then publishes `server.json` to the MCP Registry
+
+To use the release workflow, add this repository secret:
+
+- `NPM_TOKEN`: npm access token with permission to publish `@denis-platonov/qtm4j-mcp-server`
+
+Then cut a release like this:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 ### Environment Variables
