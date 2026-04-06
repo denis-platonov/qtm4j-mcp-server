@@ -1,20 +1,58 @@
 {
-  "name": "qtm4j-mcp-server",
+  "name": "@denis-platonov/qtm4j-mcp-server",
   "version": "1.0.0",
   "description": "MCP server for QMetry Test Management for Jira (QTM4J) Open API",
+  "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "qtm4j-mcp-server": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "server.json"
+  ],
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:live": "vitest run --config vitest.live.config.ts"
   },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "qmetry",
+    "qtm4j",
+    "jira",
+    "testing"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/denis-platonov/qtm4j-mcp-server.git"
+  },
+  "homepage": "https://github.com/denis-platonov/qtm4j-mcp-server#readme",
+  "bugs": {
+    "url": "https://github.com/denis-platonov/qtm4j-mcp-server/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "mcpName": "io.github.denis-platonov/qtm4j",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.4",
+    "@types/node": "^22.0.0",
     "typescript": "^5.7.0",
-    "@types/node": "^22.0.0"
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=20.0.0"

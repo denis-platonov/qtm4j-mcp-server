@@ -1,0 +1,43 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.denis-platonov/qtm4j",
+  "title": "QTM4J",
+  "description": "MCP server for QMetry Test Management for Jira (QTM4J) Open API.",
+  "repository": {
+    "url": "https://github.com/denis-platonov/qtm4j-mcp-server",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@denis-platonov/qtm4j-mcp-server",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "QTM4J_API_KEY",
+          "description": "QTM4J Open API key.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "QTM4J_BASE_URL",
+          "description": "Base URL for the QTM4J Open API.",
+          "default": "https://qtmcloud.qmetry.com/rest/api/latest"
+        },
+        {
+          "name": "QTM4J_PROJECT_ID",
+          "description": "Default QTM4J project ID used when tool calls omit projectId."
+        },
+        {
+          "name": "NODE_TLS_REJECT_UNAUTHORIZED",
+          "description": "Set to 0 only when you must allow self-signed TLS certificates."
+        }
+      ]
+    }
+  ]
+}

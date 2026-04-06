@@ -14,13 +14,25 @@ export interface CycleTestCase {
   [key: string]: unknown;
 }
 
+export interface HttpResponseLike {
+  status: number;
+  text(): Promise<string>;
+}
+
+export type FetchLike = (
+  input: string,
+  init?: { method?: string; headers?: Record<string, string>; body?: string }
+) => Promise<HttpResponseLike>;
+
 export class QTM4JClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
+  private readonly fetchImpl: FetchLike;
 
-  constructor(baseUrl: string, apiKey: string) {
+  constructor(baseUrl: string, apiKey: string, fetchImpl: FetchLike = fetch as FetchLike) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
     this.apiKey = apiKey;
+    this.fetchImpl = fetchImpl;
   }
 
   private async request(
@@ -40,7 +52,7 @@ export class QTM4JClient {
       "Content-Type": "application/json",
     };
 
-    const res = await fetch(url, {
+    const res = await this.fetchImpl(url, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -194,7 +206,7 @@ export class QTM4JClient {
 
 // --- Helpers ---
 
-function extractId(root: Record<string, unknown>): string | null {
+export function extractId(root: Record<string, unknown>): string | null {
   if (root?.id != null) return root.id.toString();
   if (root?.data && typeof root.data === "object" && !Array.isArray(root.data)) {
     const id = (root.data as Record<string, unknown>).id;
@@ -203,7 +215,7 @@ function extractId(root: Record<string, unknown>): string | null {
   return null;
 }
 
-function extractVersionNo(obj: Record<string, unknown>): number {
+export function extractVersionNo(obj: Record<string, unknown>): number {
   if (obj?.version && typeof obj.version === "object") {
     const v = (obj.version as Record<string, unknown>).versionNo;
     return v != null ? Number(v) : 1;
@@ -211,7 +223,7 @@ function extractVersionNo(obj: Record<string, unknown>): number {
   return 1;
 }
 
-function extractExecutionId(root: Record<string, unknown>): number | null {
+export function extractExecutionId(root: Record<string, unknown>): number | null {
   const data = root?.data;
 
   if (Array.isArray(data) && data.length > 0) {
