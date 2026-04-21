@@ -26,12 +26,40 @@ MCP Registry name: `io.github.denis-platonov/qtm4j`
 |------|-------------|
 | `create_test_cycle` | Create a new test cycle (run) |
 | `search_test_case` | Search for a test case by key (e.g. PE26-TC-2) |
-| `create_test_case` | Create a new test case |
+| `search_test_cases` | Search test cases with pagination and optional summary filters |
+| `list_all_project_test_cases` | Fetch and merge paginated test case results across a project |
+| `create_test_case` | Create a new test case, optionally placing it in folders |
 | `list_cycle_test_cases` | List all test cases in a cycle |
 | `add_test_case_to_cycle` | Add a test case to a cycle |
 | `update_execution_status` | Update execution result (Pass/Fail) |
 | `close_test_cycle` | Close a test cycle |
 | `get_attachment_url` | Get presigned URL for attachment upload |
+| `add_test_case_steps` | Add one or more steps to a test case version |
+| `add_test_case_to_folders` | Add a test case version to one or more folders |
+| `create_test_case_folder` | Create a test case folder in a project |
+| `get_test_case` | Fetch a test case by ID or key |
+| `get_test_case_details` | Fetch full details for a specific test case version |
+| `get_test_case_steps` | List or search steps on a test case version |
+| `list_test_case_folders` | List project test case folders with flat paths |
+| `remove_test_case_from_folders` | Remove a test case version from folders |
+| `update_test_case_description` | Update a test case version description |
+| `update_test_case_step` | Update an existing test step |
+| `update_test_case_summary` | Update a test case version summary |
+
+The full set of tools (including `search_test_cases` with `startAt`, `list_all_project_test_cases`, folder and step helpers) is defined in `src/tools.ts`. After `npm run build`, run `npm run list-tools` to print every registered tool name — use this to confirm Cursor is using **this** build (you should see `list_all_project_test_cases`).
+
+### Cursor: use the local build for full functionality
+
+`npx @denis-platonov/qtm4j-mcp-server` may be an older npm release. To guarantee tools such as **`list_all_project_test_cases`** and correct **`startAt`** handling:
+
+1. In this directory: `npm install && npm run build`.
+2. Merge `cursor-mcp.example.json` into your **user** Cursor config `~/.cursor/mcp.json` (Windows: `%USERPROFILE%\.cursor\mcp.json`). Adjust the `args` path to your absolute `dist/index.js`.
+3. Run `npm run list-tools` and confirm the tool count matches expectations.
+4. Restart Cursor or toggle the MCP server off/on.
+
+### Cursor workspace tool descriptors
+
+If you use Cursor’s workspace `mcps/<server>/tools/*.json` hints for the agent, keep those JSON schemas in sync with `src/tools.ts` (same parameter names as the Zod definitions). Rebuild and restart MCP after changing tools.
 
 ## Setup
 
@@ -177,60 +205,34 @@ npm run test:live
 
 ### Local Development
 
-Add to `~/.cursor/mcp.json`:
+Copy `cursor-mcp.example.json` into `~/.cursor/mcp.json` (merge with existing `mcpServers`) and set `args` to the absolute path of `dist/index.js`, for example on Windows:
 
-```json
-{
-  "mcpServers": {
-    "qtm4j": {
-      "command": "node",
-      "args": ["/path/to/qtm4j-mcp-server/dist/index.js"],
-      "env": {
-        "QTM4J_API_KEY": "your-api-key",
-        "QTM4J_BASE_URL": "https://qtmcloud.qmetry.com/rest/api/latest",
-        "QTM4J_PROJECT_ID": "10800",
-        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
-      }
-    }
-  }
-}
-```
+`"args": ["C:/Users/you/projects/qa-all-in-one/tools/qtm4j-mcp-server/dist/index.js"]`
+
+Optional: `NODE_TLS_REJECT_UNAUTHORIZED": "0"` in `env` only if you must use self-signed TLS.
 
 ### Publish
 
-1. Log into npm:
+This repository uses a tag-driven GitHub Actions release workflow.
 
-```bash
-npm login
-```
-
-2. Build and verify the package contents:
+1. Align `package.json` and `server.json` to the release version.
+2. Build and verify locally:
 
 ```bash
 npm run build
-npm pack --dry-run
+npm run test:run
 ```
 
-3. Publish the package:
+3. Commit the release-prep changes.
+4. Create and push the release tag:
 
 ```bash
-npm publish
+git tag v1.1.0
+git push origin sync/desktop-qtm4j-source
+git push origin v1.1.0
 ```
 
-4. Push this project to `https://github.com/denis-platonov/qtm4j-mcp-server` so the repository metadata resolves correctly.
-
-5. Install `mcp-publisher` and log into the MCP Registry with GitHub:
-
-```bash
-brew install mcp-publisher
-mcp-publisher login github
-```
-
-6. Publish the server metadata:
-
-```bash
-mcp-publisher publish
-```
+5. GitHub Actions will verify the tag matches `package.json` and `server.json`, publish the npm package, and then publish `server.json` to the MCP Registry.
 
 You can then verify discovery with:
 
@@ -252,8 +254,8 @@ To use the release workflow, add this repository secret:
 Then cut a release like this:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 ### Environment Variables

@@ -31,12 +31,24 @@ export function createToolClientMock(): {
   const mocks = {
     createTestCycle: vi.fn(),
     searchTestCaseByKey: vi.fn(),
-    createTestCase: vi.fn(),
+    searchTestCases: vi.fn(),
+    listAllProjectTestCases: vi.fn(),
+    createTestCaseWithFolders: vi.fn(),
+    listTestCaseFoldersWithFlat: vi.fn(),
+    getTestCaseFlexible: vi.fn(),
+    getTestCaseVersionDetails: vi.fn(),
+    createTestCaseFolder: vi.fn(),
+    updateTestCaseFolders: vi.fn(),
+    searchTestCaseSteps: vi.fn(),
+    addTestCaseSteps: vi.fn(),
     listCycleTestCases: vi.fn(),
     addTestCaseToCycle: vi.fn(),
     updateExecutionStatus: vi.fn(),
     closeTestCycle: vi.fn(),
     getAttachmentUrl: vi.fn(),
+    updateTestCaseSummary: vi.fn(),
+    updateTestCaseDescription: vi.fn(),
+    updateTestCaseStep: vi.fn(),
   };
 
   return {

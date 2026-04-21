@@ -4,7 +4,85 @@ import type { CycleTestCase, TestCaseRef } from "./qtm4j-client.js";
 export interface QTM4JToolClient {
   createTestCycle(projectId: number, summary: string): Promise<string | null>;
   searchTestCaseByKey(projectId: number, key: string): Promise<TestCaseRef | null>;
-  createTestCase(projectId: number, summary: string): Promise<TestCaseRef | null>;
+  searchTestCases(params: {
+    projectId: number;
+    key?: string;
+    summary?: string;
+    startAt?: number;
+    maxResults?: number;
+  }): Promise<Record<string, unknown>>;
+  listAllProjectTestCases(params: {
+    projectId: number;
+    key?: string;
+    summaryContains?: string;
+    maxResultsPerPage?: number;
+    maxPages?: number;
+  }): Promise<Record<string, unknown>>;
+  createTestCaseWithFolders(
+    projectId: number,
+    summary: string,
+    opts: { folderId?: number; autoPickFolder?: boolean; folderKeywords?: string[] }
+  ): Promise<Record<string, unknown> | null>;
+  listTestCaseFoldersWithFlat(projectId: number, withCount?: boolean): Promise<Record<string, unknown>>;
+  getTestCaseFlexible(testCaseId: string, projectId: number, versionNo?: number): Promise<unknown>;
+  getTestCaseVersionDetails(
+    testCaseIdOrKey: string,
+    versionNo: number,
+    projectId: number,
+    fields?: string
+  ): Promise<unknown>;
+  createTestCaseFolder(
+    projectId: number,
+    folderName: string,
+    parentId: number,
+    description?: string
+  ): Promise<unknown>;
+  updateTestCaseFolders(
+    testCaseId: string,
+    versionNo: number,
+    projectId: number,
+    addFolderIds?: number[],
+    removeFolderIds?: number[]
+  ): Promise<unknown>;
+  updateTestCaseSummary(
+    testCaseId: string,
+    versionNo: number,
+    projectId: number,
+    summary: string
+  ): Promise<unknown>;
+  updateTestCaseDescription(
+    testCaseId: string,
+    versionNo: number,
+    projectId: number,
+    description: string
+  ): Promise<unknown>;
+  updateTestCaseStep(
+    testCaseId: string,
+    versionNo: number,
+    projectId: number,
+    stepId: string,
+    fields: { stepDetails?: string; expectedResult?: string; testData?: string },
+    useLatestVersion?: boolean
+  ): Promise<unknown>;
+  searchTestCaseSteps(params: {
+    testCaseId: string;
+    versionNo: number;
+    projectId: number;
+    startAt?: number;
+    maxResults?: number;
+    sort?: string;
+    stepDetailsContains?: string;
+    testDataContains?: string;
+    expectedResultContains?: string;
+    useLatestVersion?: boolean;
+  }): Promise<unknown>;
+  addTestCaseSteps(
+    testCaseId: string,
+    versionNo: number,
+    projectId: number,
+    steps: Array<{ stepDetails: string; expectedResult?: string; testData?: string }>,
+    aiGenerated?: boolean
+  ): Promise<unknown>;
   listCycleTestCases(testCycleId: string): Promise<CycleTestCase[]>;
   addTestCaseToCycle(testCycleId: string, testCaseId: string, versionNo: number): Promise<number | null>;
   updateExecutionStatus(
@@ -65,11 +143,77 @@ export const TOOL_DEFINITIONS = {
       key: z.string().describe("Test case key, e.g. PE26-TC-2"),
     }),
   },
+  search_test_cases: {
+    description:
+      "Paginated POST /testcases/search. Returns the raw API JSON (includes data, total, startAt, maxResults when provided). Use startAt/maxResults for paging; summaryContains adds a leading ~ for contains-style summary filter when not already present.",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      key: z.string().optional().describe("Exact test case key filter (optional)"),
+      summaryContains: z
+        .string()
+        .optional()
+        .describe("Summary substring filter; sent as filter.summary with ~ prefix unless value already starts with ~"),
+      summary: z
+        .string()
+        .optional()
+        .describe("Raw filter.summary value (advanced; overrides summaryContains when both set)"),
+      startAt: z.number().int().min(0).optional().default(0).describe("Zero-based offset for this page"),
+      maxResults: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .optional()
+        .default(100)
+        .describe("Page size (1–500, default 100)"),
+    }),
+  },
+  list_all_project_test_cases: {
+    description:
+      "Fetches all pages of /testcases/search for a project until a short page or maxPages. Merges rows and dedupes by test case key when present. Use for exporting or counting beyond a single page.",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      key: z.string().optional().describe("Optional exact key filter"),
+      summaryContains: z
+        .string()
+        .optional()
+        .describe("Optional summary contains filter (~ prefix applied like search_test_cases)"),
+      maxResultsPerPage: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .optional()
+        .default(100)
+        .describe("Page size per request"),
+      maxPages: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .optional()
+        .default(100)
+        .describe("Safety cap: max pages to fetch (default 100 → up to 10k rows at page size 100)"),
+    }),
+  },
   create_test_case: {
-    description: "Create a new test case in QTM4J. Returns test case ID and version.",
+    description:
+      "Create a new test case in QTM4J. Returns testCaseId, versionNo, and optional folderId / pickedFolder / folderWarning. Use folderId, or autoPickFolder with optional folderKeywords.",
     parameters: (defaultProjectId?: number) => ({
       projectId: optionalProjectId(defaultProjectId),
       summary: z.string().describe("Test case summary/title"),
+      folderId: z
+        .number()
+        .optional()
+        .describe("Place the new case in this folder (from list_test_case_folders flatFolders.id)"),
+      autoPickFolder: z
+        .boolean()
+        .optional()
+        .describe("If true, score folders using built-in Web/LEX-style keywords plus folderKeywords"),
+      folderKeywords: z
+        .array(z.string())
+        .optional()
+        .describe("Extra keywords matched against folder path (case-insensitive)"),
     }),
   },
   list_cycle_test_cases: {
@@ -114,17 +258,160 @@ export const TOOL_DEFINITIONS = {
       testCaseExecutionId: z.number().describe("Test case execution ID"),
     }),
   },
+  add_test_case_steps: {
+    description:
+      "Create test steps on a test case version (POST …/teststeps). steps[].stepDetails is required.",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      testCaseId: z.string().describe("Internal test case id (or key if API accepts)"),
+      versionNo: z.number().optional().default(1).describe("Test case version number"),
+      steps: z
+        .array(
+          z.object({
+            stepDetails: z.string(),
+            expectedResult: z.string().optional(),
+            testData: z.string().optional(),
+          })
+        )
+        .min(1)
+        .describe("Steps to create"),
+      aiGenerated: z.boolean().optional().describe("If true, sends aiGenerated=true query flag"),
+    }),
+  },
+  add_test_case_to_folders: {
+    description:
+      "Add a test case version to folders (PUT …/versions/{no} with folders.add). Use folder ids from list_test_case_folders.",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      testCaseId: z.string().describe("Internal id or key PE26-TC-…"),
+      versionNo: z.number().optional().default(1),
+      addFolderIds: z.array(z.number()).min(1).describe("Folder ids to add"),
+    }),
+  },
+  create_test_case_folder: {
+    description: "Create a testcase folder (POST /projects/{projectId}/testcase-folders). parentId -1 = root.",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      folderName: z.string().min(1).describe("New folder name"),
+      parentId: z
+        .number()
+        .optional()
+        .describe("Parent folder id from list_test_case_folders; omit for -1 (root)"),
+      description: z.string().optional().describe("Optional folder description"),
+    }),
+  },
+  get_test_case: {
+    description:
+      "GET /testcases/{id}; on failure resolves by key via search. Optional versionNo returns version details instead of slim record.",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      testCaseId: z.string().describe("Internal id or key"),
+      versionNo: z.number().optional().describe("If set, fetch that version details"),
+    }),
+  },
+  get_test_case_details: {
+    description: "GET /testcases/{id}/versions/{no} full version payload. Optional fields= comma-separated.",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      testCaseId: z.string().describe("Internal id or key"),
+      versionNo: z.number().optional().default(1),
+      scope: z.enum(["project", "release", "cycle"]).optional().describe("Ignored; kept for compatibility"),
+      fields: z.string().optional().describe("Optional comma-separated API fields"),
+    }),
+  },
+  get_test_case_steps: {
+    description:
+      "POST …/teststeps/search (QTM4J GetTestStepRequest). Pagination: query startAt & maxResults (max 100). Body is {} to list all steps, or { filter: { stepDetails?, testData?, expectedResult? } } — no projectId in the filter. Optional sort is a query parameter.",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      testCaseId: z.string().describe("Internal test case id"),
+      versionNo: z.number().optional().default(1),
+      startAt: z.number().int().min(0).optional().default(0),
+      maxResults: z.number().int().min(1).max(100).optional().default(50),
+      sort: z.string().optional().describe("e.g. seqNo:asc"),
+      stepDetailsContains: z.string().optional(),
+      testDataContains: z.string().optional(),
+      expectedResultContains: z.string().optional(),
+      useLatestVersion: z.boolean().optional().describe("Use /versions/latest/… path"),
+    }),
+  },
+  list_test_case_folders: {
+    description: "GET /projects/{id}/testcase-folders plus flatFolders (id, name, path).",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      withCount: z.boolean().optional().describe("Request withCount=true when supported"),
+    }),
+  },
+  remove_test_case_from_folders: {
+    description: "Remove a test case version from folders (PUT …/versions/{no} with folders.delete).",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      testCaseId: z.string().describe("Internal id or key"),
+      versionNo: z.number().optional().default(1),
+      removeFolderIds: z.array(z.number()).min(1).describe("Folder ids to remove"),
+    }),
+  },
+  update_test_case_description: {
+    description:
+      "Update the description field on a test case version (PUT …/testcases/{id}/versions/{no} with description).",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      testCaseId: z.string().describe("Internal id or key"),
+      versionNo: z.number().optional().default(1),
+      description: z.string().describe("New description text"),
+    }),
+  },
+  update_test_case_step: {
+    description:
+      "Edit an existing test step (PUT …/versions/{v}/teststeps with a JSON array). stepId is the numeric id from get_test_case_steps. Provide at least one of stepDetails, expectedResult, testData.",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      testCaseId: z.string().describe("Internal id or key"),
+      versionNo: z.number().optional().default(1),
+      stepId: z.string().min(1).describe("Step id from test step search/list"),
+      stepDetails: z.string().optional().describe("Action / step text"),
+      expectedResult: z.string().optional(),
+      testData: z.string().optional(),
+      useLatestVersion: z
+        .boolean()
+        .optional()
+        .describe("If true, use /versions/latest/… in the path instead of versionNo"),
+    }),
+  },
+  update_test_case_summary: {
+    description:
+      "Update the summary (title) on a test case version (PUT …/testcases/{id}/versions/{no} with summary).",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      testCaseId: z.string().describe("Internal id or key"),
+      versionNo: z.number().optional().default(1),
+      summary: z.string().min(1).describe("New summary / title"),
+    }),
+  },
 } as const satisfies Record<string, ToolDefinition>;
 
 export type ToolName = keyof typeof TOOL_DEFINITIONS;
 
 type ToolHandlerMap = Record<ToolName, (args: Record<string, unknown>) => Promise<ToolResult>>;
 
-function resolveProjectId(projectId: number | undefined, defaultProjectId?: number): number | undefined {
-  return projectId ?? defaultProjectId;
+/** Some MCP clients send numbers as strings; coerce so pagination and projectId work reliably. */
+export function coerceOptionalNumber(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
 }
 
-function requireProjectId(projectId: number | undefined, defaultProjectId?: number): number | ToolResult {
+function resolveProjectId(projectId: unknown, defaultProjectId?: number): number | undefined {
+  const coerced = coerceOptionalNumber(projectId);
+  if (coerced !== undefined) return coerced;
+  return defaultProjectId;
+}
+
+function requireProjectId(projectId: unknown, defaultProjectId?: number): number | ToolResult {
   const resolvedProjectId = resolveProjectId(projectId, defaultProjectId);
   if (resolvedProjectId === undefined) {
     return errorResult("projectId is required (no default configured)");
@@ -146,7 +433,7 @@ export function createToolHandlers(
 ): ToolHandlerMap {
   return {
     create_test_cycle: async ({ projectId, summary }) => {
-      const pid = requireProjectId(projectId as number | undefined, defaultProjectId);
+      const pid = requireProjectId(projectId, defaultProjectId);
       if (typeof pid !== "number") return pid;
 
       const cycleId = await client.createTestCycle(pid, summary as string);
@@ -155,7 +442,7 @@ export function createToolHandlers(
       return textResult({ cycleId });
     },
     search_test_case: async ({ projectId, key }) => {
-      const pid = requireProjectId(projectId as number | undefined, defaultProjectId);
+      const pid = requireProjectId(projectId, defaultProjectId);
       if (typeof pid !== "number") return pid;
 
       const ref = await client.searchTestCaseByKey(pid, key as string);
@@ -163,14 +450,59 @@ export function createToolHandlers(
 
       return textResult({ testCaseId: ref.id, versionNo: ref.versionNo });
     },
-    create_test_case: async ({ projectId, summary }) => {
-      const pid = requireProjectId(projectId as number | undefined, defaultProjectId);
+    search_test_cases: async ({ projectId, key, summaryContains, summary, startAt, maxResults }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
       if (typeof pid !== "number") return pid;
 
-      const ref = await client.createTestCase(pid, summary as string);
-      if (!ref) return errorResult("Failed to create test case");
+      let summaryFilter: string | undefined;
+      const rawSummary = typeof summary === "string" ? summary.trim() : "";
+      if (rawSummary) {
+        summaryFilter = rawSummary;
+      } else if (typeof summaryContains === "string" && summaryContains.trim()) {
+        const s = summaryContains.trim();
+        summaryFilter = s.startsWith("~") ? s : `~${s}`;
+      }
 
-      return textResult({ testCaseId: ref.id, versionNo: ref.versionNo });
+      const payload = await client.searchTestCases({
+        projectId: pid,
+        key: typeof key === "string" && key.trim() ? key.trim() : undefined,
+        summary: summaryFilter,
+        startAt: coerceOptionalNumber(startAt),
+        maxResults: coerceOptionalNumber(maxResults),
+      });
+      return textResult(payload);
+    },
+    list_all_project_test_cases: async ({
+      projectId,
+      key,
+      summaryContains,
+      maxResultsPerPage,
+      maxPages,
+    }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+
+      const payload = await client.listAllProjectTestCases({
+        projectId: pid,
+        key: typeof key === "string" && key.trim() ? key.trim() : undefined,
+        summaryContains: typeof summaryContains === "string" ? summaryContains : undefined,
+        maxResultsPerPage: coerceOptionalNumber(maxResultsPerPage),
+        maxPages: coerceOptionalNumber(maxPages),
+      });
+      return textResult(payload);
+    },
+    create_test_case: async ({ projectId, summary, folderId, autoPickFolder, folderKeywords }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+
+      const payload = await client.createTestCaseWithFolders(pid, summary as string, {
+        folderId: folderId as number | undefined,
+        autoPickFolder: autoPickFolder as boolean | undefined,
+        folderKeywords: folderKeywords as string[] | undefined,
+      });
+      if (!payload) return errorResult("Failed to create test case");
+
+      return textResult(payload);
     },
     list_cycle_test_cases: async ({ testCycleId }) => {
       const testCases = await client.listCycleTestCases(testCycleId as string);
@@ -194,7 +526,7 @@ export function createToolHandlers(
       testCaseExecutionId,
       executionResultId,
     }) => {
-      const pid = requireProjectId(projectId as number | undefined, defaultProjectId);
+      const pid = requireProjectId(projectId, defaultProjectId);
       if (typeof pid !== "number") return pid;
 
       await client.updateExecutionStatus(
@@ -210,7 +542,7 @@ export function createToolHandlers(
       });
     },
     close_test_cycle: async ({ projectId, testCycleId, statusId }) => {
-      const pid = requireProjectId(projectId as number | undefined, defaultProjectId);
+      const pid = requireProjectId(projectId, defaultProjectId);
       if (typeof pid !== "number") return pid;
 
       await client.closeTestCycle(pid, testCycleId as string, statusId as number);
@@ -222,7 +554,7 @@ export function createToolHandlers(
       fileName,
       testCaseExecutionId,
     }) => {
-      const pid = requireProjectId(projectId as number | undefined, defaultProjectId);
+      const pid = requireProjectId(projectId, defaultProjectId);
       if (typeof pid !== "number") return pid;
 
       const result = await client.getAttachmentUrl(
@@ -232,6 +564,223 @@ export function createToolHandlers(
         testCaseExecutionId as number
       );
       return textResult(result);
+    },
+    add_test_case_steps: async ({
+      projectId,
+      testCaseId,
+      versionNo,
+      steps,
+      aiGenerated,
+    }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      const vNo = (versionNo as number | undefined) ?? 1;
+      try {
+        const data = await client.addTestCaseSteps(
+          testCaseId as string,
+          vNo,
+          pid,
+          steps as Array<{ stepDetails: string; expectedResult?: string; testData?: string }>,
+          aiGenerated as boolean | undefined
+        );
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
+    },
+    add_test_case_to_folders: async ({ projectId, testCaseId, versionNo, addFolderIds }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      const vNo = (versionNo as number | undefined) ?? 1;
+      try {
+        const data = await client.updateTestCaseFolders(
+          testCaseId as string,
+          vNo,
+          pid,
+          addFolderIds as number[],
+          undefined
+        );
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
+    },
+    create_test_case_folder: async ({ projectId, folderName, parentId, description: folderDescription }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      const p = parentId !== undefined ? (parentId as number) : -1;
+      try {
+        const data = await client.createTestCaseFolder(
+          pid,
+          folderName as string,
+          p,
+          folderDescription as string | undefined
+        );
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
+    },
+    get_test_case: async ({ projectId, testCaseId, versionNo }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      try {
+        const data = await client.getTestCaseFlexible(
+          testCaseId as string,
+          pid,
+          versionNo as number | undefined
+        );
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
+    },
+    get_test_case_details: async ({ projectId, testCaseId, versionNo, fields }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      const vNo = (versionNo as number | undefined) ?? 1;
+      try {
+        const data = await client.getTestCaseVersionDetails(
+          testCaseId as string,
+          vNo,
+          pid,
+          fields as string | undefined
+        );
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
+    },
+    get_test_case_steps: async ({
+      projectId,
+      testCaseId,
+      versionNo,
+      startAt,
+      maxResults,
+      sort,
+      stepDetailsContains,
+      testDataContains,
+      expectedResultContains,
+      useLatestVersion,
+    }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      const vNo = (versionNo as number | undefined) ?? 1;
+      try {
+        const data = await client.searchTestCaseSteps({
+          testCaseId: testCaseId as string,
+          versionNo: vNo,
+          projectId: pid,
+          startAt: coerceOptionalNumber(startAt),
+          maxResults: coerceOptionalNumber(maxResults),
+          sort: sort as string | undefined,
+          stepDetailsContains: stepDetailsContains as string | undefined,
+          testDataContains: testDataContains as string | undefined,
+          expectedResultContains: expectedResultContains as string | undefined,
+          useLatestVersion: useLatestVersion as boolean | undefined,
+        });
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
+    },
+    list_test_case_folders: async ({ projectId, withCount }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      try {
+        const data = await client.listTestCaseFoldersWithFlat(pid, withCount as boolean | undefined);
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
+    },
+    remove_test_case_from_folders: async ({ projectId, testCaseId, versionNo, removeFolderIds }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      const vNo = (versionNo as number | undefined) ?? 1;
+      try {
+        const data = await client.updateTestCaseFolders(
+          testCaseId as string,
+          vNo,
+          pid,
+          undefined,
+          removeFolderIds as number[]
+        );
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
+    },
+    update_test_case_description: async ({ projectId, testCaseId, versionNo, description }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      const vNo = (versionNo as number | undefined) ?? 1;
+      try {
+        const data = await client.updateTestCaseDescription(
+          testCaseId as string,
+          vNo,
+          pid,
+          description as string
+        );
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
+    },
+    update_test_case_step: async ({
+      projectId,
+      testCaseId,
+      versionNo,
+      stepId,
+      stepDetails,
+      expectedResult,
+      testData,
+      useLatestVersion,
+    }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      const vNo = (versionNo as number | undefined) ?? 1;
+      const fields = {
+        stepDetails: stepDetails as string | undefined,
+        expectedResult: expectedResult as string | undefined,
+        testData: testData as string | undefined,
+      };
+      if (
+        fields.stepDetails === undefined &&
+        fields.expectedResult === undefined &&
+        fields.testData === undefined
+      ) {
+        return errorResult("Provide at least one of stepDetails, expectedResult, or testData");
+      }
+      try {
+        const data = await client.updateTestCaseStep(
+          testCaseId as string,
+          vNo,
+          pid,
+          stepId as string,
+          fields,
+          useLatestVersion as boolean | undefined
+        );
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
+    },
+    update_test_case_summary: async ({ projectId, testCaseId, versionNo, summary }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      const vNo = (versionNo as number | undefined) ?? 1;
+      try {
+        const data = await client.updateTestCaseSummary(
+          testCaseId as string,
+          vNo,
+          pid,
+          summary as string
+        );
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
     },
   };
 }
