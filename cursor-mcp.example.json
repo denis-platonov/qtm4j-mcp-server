@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "user-qtm4j-local": {
+      "command": "node",
+      "args": [
+        "C:/Users/User/Desktop/qa-all-in-one/tools/qtm4j-mcp-server/dist/index.js"
+      ],
+      "env": {
+        "QTM4J_API_KEY": "your-api-key",
+        "QTM4J_BASE_URL": "https://qtmcloud.qmetry.com/rest/api/latest",
+        "QTM4J_PROJECT_ID": "10800"
+      }
+    }
+  }
+}

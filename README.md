@@ -33,6 +33,21 @@ MCP Registry name: `io.github.denis-platonov/qtm4j`
 | `close_test_cycle` | Close a test cycle |
 | `get_attachment_url` | Get presigned URL for attachment upload |
 
+The full set of tools (including `search_test_cases` with `startAt`, `list_all_project_test_cases`, folder and step helpers) is defined in `src/tools.ts`. After `npm run build`, run `npm run list-tools` to print every registered tool name — use this to confirm Cursor is using **this** build (you should see `list_all_project_test_cases`).
+
+### Cursor: use the local build for full functionality
+
+`npx @denis-platonov/qtm4j-mcp-server` may be an older npm release. To guarantee tools such as **`list_all_project_test_cases`** and correct **`startAt`** handling:
+
+1. In this directory: `npm install && npm run build`.
+2. Merge `cursor-mcp.example.json` into your **user** Cursor config `~/.cursor/mcp.json` (Windows: `%USERPROFILE%\.cursor\mcp.json`). Adjust the `args` path to your absolute `dist/index.js`.
+3. Run `npm run list-tools` and confirm the tool count matches expectations.
+4. Restart Cursor or toggle the MCP server off/on.
+
+### Cursor workspace tool descriptors
+
+If you use Cursor’s workspace `mcps/<server>/tools/*.json` hints for the agent, keep those JSON schemas in sync with `src/tools.ts` (same parameter names as the Zod definitions). Rebuild and restart MCP after changing tools.
+
 ## Setup
 
 ### Prerequisites
@@ -177,24 +192,11 @@ npm run test:live
 
 ### Local Development
 
-Add to `~/.cursor/mcp.json`:
+Copy `cursor-mcp.example.json` into `~/.cursor/mcp.json` (merge with existing `mcpServers`) and set `args` to the absolute path of `dist/index.js`, for example on Windows:
 
-```json
-{
-  "mcpServers": {
-    "qtm4j": {
-      "command": "node",
-      "args": ["/path/to/qtm4j-mcp-server/dist/index.js"],
-      "env": {
-        "QTM4J_API_KEY": "your-api-key",
-        "QTM4J_BASE_URL": "https://qtmcloud.qmetry.com/rest/api/latest",
-        "QTM4J_PROJECT_ID": "10800",
-        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
-      }
-    }
-  }
-}
-```
+`"args": ["C:/Users/you/projects/qa-all-in-one/tools/qtm4j-mcp-server/dist/index.js"]`
+
+Optional: `NODE_TLS_REJECT_UNAUTHORIZED": "0"` in `env` only if you must use self-signed TLS.
 
 ### Publish
 

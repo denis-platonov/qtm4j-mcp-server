@@ -78,20 +78,96 @@ describe("createToolHandlers", () => {
     expect(parseToolPayload(result)).toEqual({ testCaseId: "TC-1", versionNo: 3 });
   });
 
+  it("forwards search_test_cases with summaryContains and paging fields", async () => {
+    const { client, mocks } = createToolClientMock();
+    mocks.searchTestCases.mockResolvedValue({ data: [], total: 0 });
+    const handlers = createToolHandlers(client, 42);
+
+    const result = await handlers.search_test_cases({
+      summaryContains: "Lex",
+      startAt: 100,
+      maxResults: 50,
+    });
+
+    expect(mocks.searchTestCases).toHaveBeenCalledWith({
+      projectId: 42,
+      key: undefined,
+      summary: "~Lex",
+      startAt: 100,
+      maxResults: 50,
+    });
+    expect(parseToolPayload(result)).toEqual({ data: [], total: 0 });
+  });
+
+  it("coerces string startAt, maxResults, and projectId for search_test_cases", async () => {
+    const { client, mocks } = createToolClientMock();
+    mocks.searchTestCases.mockResolvedValue({ data: [] });
+    const handlers = createToolHandlers(client);
+
+    await handlers.search_test_cases({
+      projectId: "10800",
+      summaryContains: "e",
+      startAt: "100",
+      maxResults: "50",
+    });
+
+    expect(mocks.searchTestCases).toHaveBeenCalledWith({
+      projectId: 10800,
+      key: undefined,
+      summary: "~e",
+      startAt: 100,
+      maxResults: 50,
+    });
+  });
+
+  it("uses raw summary over summaryContains for search_test_cases", async () => {
+    const { client, mocks } = createToolClientMock();
+    mocks.searchTestCases.mockResolvedValue({});
+    const handlers = createToolHandlers(client, 42);
+
+    await handlers.search_test_cases({ summary: "~Raw", summaryContains: "ignored" });
+
+    expect(mocks.searchTestCases).toHaveBeenCalledWith(
+      expect.objectContaining({ summary: "~Raw" })
+    );
+  });
+
+  it("returns list_all_project_test_cases merged payload", async () => {
+    const { client, mocks } = createToolClientMock();
+    mocks.listAllProjectTestCases.mockResolvedValue({ projectId: 42, totalRows: 0, data: [] });
+    const handlers = createToolHandlers(client, 42);
+
+    const result = await handlers.list_all_project_test_cases({
+      key: "PE26-TC-1",
+      summaryContains: "Login",
+      maxResultsPerPage: 200,
+      maxPages: 5,
+    });
+
+    expect(mocks.listAllProjectTestCases).toHaveBeenCalledWith({
+      projectId: 42,
+      key: "PE26-TC-1",
+      summaryContains: "Login",
+      maxResultsPerPage: 200,
+      maxPages: 5,
+    });
+    expect(parseToolPayload(result)).toEqual({ projectId: 42, totalRows: 0, data: [] });
+  });
+
   it("returns a created test case payload", async () => {
     const { client, mocks } = createToolClientMock();
-    mocks.createTestCase.mockResolvedValue({ id: "TC-1", versionNo: 4 });
+    mocks.createTestCaseWithFolders.mockResolvedValue({ testCaseId: "TC-1", versionNo: 4 });
     const handlers = createToolHandlers(client, 42);
 
     const result = await handlers.create_test_case({ summary: "Create me" });
 
-    expect(mocks.createTestCase).toHaveBeenCalledWith(42, "Create me");
+    expect(mocks.createTestCaseWithFolders).toHaveBeenCalledWith(42, "Create me", {});
     expect(parseToolPayload(result)).toEqual({ testCaseId: "TC-1", versionNo: 4 });
   });
 
   it("returns an error when create_test_case yields null", async () => {
     const { client, mocks } = createToolClientMock();
-    mocks.createTestCase.mockResolvedValue(null);
+    mocks.createTestCaseWithFolders.mockResolvedValue(null);
     const handlers = createToolHandlers(client, 42);
 
     await expect(handlers.create_test_case({ summary: "Create me" })).resolves.toEqual(
@@ -187,7 +263,7 @@ describe("createToolHandlers", () => {
 
   it("propagates client exceptions", async () => {
     const { client, mocks } = createToolClientMock();
-    mocks.createTestCase.mockRejectedValue(new Error("boom"));
+    mocks.createTestCaseWithFolders.mockRejectedValue(new Error("boom"));
     const handlers = createToolHandlers(client, 42);
 
     await expect(handlers.create_test_case({ summary: "Create me" })).rejects.toThrow("boom");

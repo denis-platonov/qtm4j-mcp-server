@@ -16,7 +16,28 @@ describe("createServer", () => {
     );
 
     expect(server).toBeDefined();
-    expect(Object.keys(TOOL_DEFINITIONS)).toHaveLength(8);
+    expect(Object.keys(TOOL_DEFINITIONS).sort()).toEqual(
+      [
+        "add_test_case_steps",
+        "add_test_case_to_cycle",
+        "add_test_case_to_folders",
+        "close_test_cycle",
+        "create_test_case",
+        "create_test_case_folder",
+        "create_test_cycle",
+        "get_attachment_url",
+        "get_test_case",
+        "get_test_case_details",
+        "get_test_case_steps",
+        "list_all_project_test_cases",
+        "list_cycle_test_cases",
+        "list_test_case_folders",
+        "remove_test_case_from_folders",
+        "search_test_case",
+        "search_test_cases",
+        "update_execution_status",
+      ].sort()
+    );
   });
 });
 

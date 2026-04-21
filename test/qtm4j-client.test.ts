@@ -84,6 +84,131 @@ describe("QTM4JClient", () => {
       id: "123",
       versionNo: 3,
     });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.test/testcases/search?startAt=0&maxResults=1",
+      {
+        method: "POST",
+        headers: {
+          apiKey: "secret",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          filter: { projectId: "42", key: "TC-1" },
+          startAt: 0,
+          maxResults: 1,
+        }),
+      }
+    );
+  });
+
+  it("searchTestCases sends filter, startAt, and capped maxResults", async () => {
+    const fetchMock = createFetchMock(
+      createJsonResponse(200, { data: [], total: 0, startAt: 10, maxResults: 50 })
+    );
+    const client = new QTM4JClient("https://example.test", "secret", fetchMock);
+
+    await client.searchTestCases({
+      projectId: 7,
+      summary: "~Lex",
+      startAt: 10,
+      maxResults: 9999,
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://example.test/testcases/search?startAt=10&maxResults=500"
+    );
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({
+      filter: { projectId: "7", summary: "~Lex" },
+      startAt: 10,
+      maxResults: 500,
+    });
+  });
+
+  it("listAllProjectTestCases walks pages and dedupes by key", async () => {
+    const fetchMock = createFetchMock(
+      createJsonResponse(200, {
+        data: [
+          { key: "A", id: "1" },
+          { key: "B", id: "2" },
+        ],
+      }),
+      createJsonResponse(200, {
+        data: [
+          { key: "B", id: "2b" },
+          { key: "C", id: "3" },
+        ],
+      }),
+      createJsonResponse(200, { data: [] })
+    );
+    const client = new QTM4JClient("https://example.test", "secret", fetchMock);
+
+    await expect(
+      client.listAllProjectTestCases({
+        projectId: 5,
+        summaryContains: "foo",
+        maxResultsPerPage: 2,
+        maxPages: 10,
+      })
+    ).resolves.toMatchObject({
+      projectId: 5,
+      pagesFetched: 3,
+      totalRows: 3,
+      uniqueKeys: 3,
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://example.test/testcases/search?startAt=0&maxResults=2"
+    );
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toMatchObject({
+      filter: { projectId: "5", summary: "~foo" },
+      startAt: 0,
+      maxResults: 2,
+    });
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      "https://example.test/testcases/search?startAt=2&maxResults=2"
+    );
+    expect(fetchMock.mock.calls[2][0]).toBe(
+      "https://example.test/testcases/search?startAt=4&maxResults=2"
+    );
+  });
+
+  it("listAllProjectTestCases continues when API caps page size below maxResultsPerPage but total is larger", async () => {
+    const fetchMock = createFetchMock(
+      createJsonResponse(200, {
+        total: 5,
+        data: [
+          { key: "A", id: "1" },
+          { key: "B", id: "2" },
+          { key: "C", id: "3" },
+        ],
+      }),
+      createJsonResponse(200, {
+        total: 5,
+        data: [
+          { key: "D", id: "4" },
+          { key: "E", id: "5" },
+        ],
+      })
+    );
+    const client = new QTM4JClient("https://example.test", "secret", fetchMock);
+
+    await expect(
+      client.listAllProjectTestCases({
+        projectId: 1,
+        maxResultsPerPage: 100,
+        maxPages: 10,
+      })
+    ).resolves.toMatchObject({
+      projectId: 1,
+      pagesFetched: 2,
+      totalRows: 5,
+      uniqueKeys: 5,
+    });
+
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      "https://example.test/testcases/search?startAt=3&maxResults=100"
+    );
   });
 
   it("reads nested version data when createTestCase falls back from the root payload", async () => {

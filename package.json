@@ -1,6 +1,6 @@
 {
   "name": "@denis-platonov/qtm4j-mcp-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP server for QMetry Test Management for Jira (QTM4J) Open API",
   "license": "MIT",
   "type": "module",
@@ -22,7 +22,9 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:live": "vitest run --config vitest.live.config.ts"
+    "test:live": "vitest run --config vitest.live.config.ts",
+    "list-tools": "node ./scripts/list-tools.mjs",
+    "folder-migrate": "node ./scripts/folder-migrate-variant-a.mjs"
   },
   "keywords": [
     "mcp",
