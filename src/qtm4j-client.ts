@@ -363,6 +363,22 @@ export class QTM4JClient {
     return this.post(`/projects/${projectId}/testcase-folders`, body);
   }
 
+  /**
+   * PUT /testcases/{id}/versions/{no} — same endpoint as folder updates (MetaDataUpdateRequest in Swagger).
+   */
+  private async putTestCaseVersion(
+    testCaseId: string,
+    versionNo: number,
+    projectId: number,
+    extra: Record<string, unknown>
+  ): Promise<unknown> {
+    return this.put(
+      `/testcases/${encodeURIComponent(testCaseId)}/versions/${versionNo}`,
+      { projectId, ...extra },
+      { projectId: projectId.toString() }
+    );
+  }
+
   async updateTestCaseFolders(
     testCaseId: string,
     versionNo: number,
@@ -373,9 +389,60 @@ export class QTM4JClient {
     const folders: Record<string, number[]> = {};
     if (addFolderIds?.length) folders.add = addFolderIds;
     if (removeFolderIds?.length) folders.delete = removeFolderIds;
+    return this.putTestCaseVersion(testCaseId, versionNo, projectId, { folders });
+  }
+
+  /** Update test case version summary (title). */
+  async updateTestCaseSummary(
+    testCaseId: string,
+    versionNo: number,
+    projectId: number,
+    summary: string
+  ): Promise<unknown> {
+    return this.putTestCaseVersion(testCaseId, versionNo, projectId, { summary });
+  }
+
+  /** Update test case version description. */
+  async updateTestCaseDescription(
+    testCaseId: string,
+    versionNo: number,
+    projectId: number,
+    description: string
+  ): Promise<unknown> {
+    return this.putTestCaseVersion(testCaseId, versionNo, projectId, { description });
+  }
+
+  /**
+   * PUT …/versions/{v}/teststeps — update step(s); body is an array per Swagger (UpdateTestStepRequest).
+   * stepId must be the numeric `id` from get_test_case_steps. When useLatestVersion is true, the path uses `latest`.
+   */
+  async updateTestCaseStep(
+    testCaseId: string,
+    versionNo: number,
+    projectId: number,
+    stepId: string,
+    fields: { stepDetails?: string; expectedResult?: string; testData?: string },
+    useLatestVersion?: boolean
+  ): Promise<unknown> {
+    const ver = useLatestVersion ? "latest" : String(versionNo ?? 1);
+    const hasMutableField =
+      fields.stepDetails !== undefined ||
+      fields.expectedResult !== undefined ||
+      fields.testData !== undefined;
+    if (!hasMutableField) {
+      throw new Error("Provide at least one of stepDetails, expectedResult, or testData");
+    }
+    const idNum = Number(stepId);
+    if (!Number.isFinite(idNum)) {
+      throw new Error(`stepId must be the numeric id from get_test_case_steps; got: ${stepId}`);
+    }
+    const step: Record<string, unknown> = { id: idNum };
+    if (fields.stepDetails !== undefined) step.stepDetails = fields.stepDetails;
+    if (fields.expectedResult !== undefined) step.expectedResult = fields.expectedResult;
+    if (fields.testData !== undefined) step.testData = fields.testData;
     return this.put(
-      `/testcases/${encodeURIComponent(testCaseId)}/versions/${versionNo}`,
-      { projectId, folders },
+      `/testcases/${encodeURIComponent(testCaseId)}/versions/${ver}/teststeps`,
+      [step],
       { projectId: projectId.toString() }
     );
   }
@@ -393,29 +460,31 @@ export class QTM4JClient {
     useLatestVersion?: boolean;
   }): Promise<unknown> {
     const ver = params.useLatestVersion ? "latest" : String(params.versionNo ?? 1);
-    const filter: Record<string, string> = {
-      projectId: params.projectId.toString(),
-    };
+    const maxResults = Math.min(Math.max(params.maxResults ?? 50, 1), 100);
+    const startAt = params.startAt ?? 0;
+    const basePath = `/testcases/${encodeURIComponent(params.testCaseId)}/versions/${ver}/teststeps`;
+
+    // QTM4J Cloud: GET …/teststeps is not supported (405). List/search is POST …/teststeps/search (Swagger: GetTestStepRequest).
+    // Body is either {} (all steps) or { filter: { stepDetails?, testData?, expectedResult? } } — no projectId in filter.
     const sd = params.stepDetailsContains?.trim();
-    if (sd) filter.stepDetails = sd.startsWith("~") ? sd : `~${sd}`;
     const td = params.testDataContains?.trim();
-    if (td) filter.testData = td.startsWith("~") ? td : `~${td}`;
     const er = params.expectedResultContains?.trim();
+    const hasStepFilters = Boolean(sd || td || er);
+
+    const filter: Record<string, string> = {};
+    if (sd) filter.stepDetails = sd.startsWith("~") ? sd : `~${sd}`;
+    if (td) filter.testData = td.startsWith("~") ? td : `~${td}`;
     if (er) filter.expectedResult = er.startsWith("~") ? er : `~${er}`;
 
-    const maxResults = Math.min(Math.max(params.maxResults ?? 50, 1), 100);
-    const body: Record<string, unknown> = {
-      filter,
-      startAt: params.startAt ?? 0,
-      maxResults,
+    const paginationQuery: Record<string, string> = {
+      startAt: String(startAt),
+      maxResults: String(maxResults),
     };
-    if (params.sort?.trim()) body.sort = params.sort.trim();
+    if (params.sort?.trim()) paginationQuery.sort = params.sort.trim();
 
-    return this.post(
-      `/testcases/${encodeURIComponent(params.testCaseId)}/versions/${ver}/teststeps/search`,
-      body,
-      { projectId: params.projectId.toString() }
-    );
+    const body: Record<string, unknown> = hasStepFilters ? { filter } : {};
+
+    return this.post(`${basePath}/search`, body, paginationQuery);
   }
 
   async addTestCaseSteps(

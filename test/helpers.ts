@@ -46,6 +46,9 @@ export function createToolClientMock(): {
     updateExecutionStatus: vi.fn(),
     closeTestCycle: vi.fn(),
     getAttachmentUrl: vi.fn(),
+    updateTestCaseSummary: vi.fn(),
+    updateTestCaseDescription: vi.fn(),
+    updateTestCaseStep: vi.fn(),
   };
 
   return {

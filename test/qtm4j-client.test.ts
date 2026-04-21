@@ -355,6 +355,92 @@ describe("QTM4JClient", () => {
       })
     );
   });
+
+  it("PUTs summary and description on the test case version endpoint", async () => {
+    const fetchMock = createFetchMock(
+      createJsonResponse(200, { ok: true }),
+      createJsonResponse(200, { ok: true })
+    );
+    const client = new QTM4JClient("https://example.test", "secret", fetchMock);
+
+    await client.updateTestCaseSummary("TC-1", 2, 99, "New title");
+    await client.updateTestCaseDescription("TC-1", 2, 99, "New body");
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://example.test/testcases/TC-1/versions/2?projectId=99");
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({
+      projectId: 99,
+      summary: "New title",
+    });
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as { body: string }).body)).toEqual({
+      projectId: 99,
+      description: "New body",
+    });
+  });
+
+  it("PUTs test step updates as an array on the collection endpoint (optional latest version path)", async () => {
+    const fetchMock = createFetchMock(createJsonResponse(200, { step: 1 }));
+    const client = new QTM4JClient("https://example.test", "secret", fetchMock);
+
+    await client.updateTestCaseStep("TC-1", 3, 5, "88", { stepDetails: "Click" }, true);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.test/testcases/TC-1/versions/latest/teststeps?projectId=5",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify([{ id: 88, stepDetails: "Click" }]),
+      })
+    );
+  });
+
+  it("rejects test step updates with no mutable fields", async () => {
+    const fetchMock = createFetchMock();
+    const client = new QTM4JClient("https://example.test", "secret", fetchMock);
+
+    await expect(client.updateTestCaseStep("TC-1", 1, 1, "s", {})).rejects.toThrow(
+      "Provide at least one of stepDetails, expectedResult, or testData"
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("searchTestCaseSteps POSTs empty body when no step field filters (Swagger GetTestStepRequest)", async () => {
+    const fetchMock = createFetchMock(createJsonResponse(200, { data: [], total: 0 }));
+    const client = new QTM4JClient("https://example.test", "secret", fetchMock);
+
+    await client.searchTestCaseSteps({
+      testCaseId: "abc-123",
+      versionNo: 2,
+      projectId: 99,
+      startAt: 0,
+      maxResults: 25,
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://example.test/testcases/abc-123/versions/2/teststeps/search?startAt=0&maxResults=25"
+    );
+    expect((fetchMock.mock.calls[0][1] as { method?: string }).method).toBe("POST");
+    expect((fetchMock.mock.calls[0][1] as { body: string }).body).toBe("{}");
+  });
+
+  it("searchTestCaseSteps falls back to POST search when stepDetailsContains is set", async () => {
+    const fetchMock = createFetchMock(createJsonResponse(200, { data: [], total: 0 }));
+    const client = new QTM4JClient("https://example.test", "secret", fetchMock);
+
+    await client.searchTestCaseSteps({
+      testCaseId: "abc-123",
+      versionNo: 2,
+      projectId: 99,
+      stepDetailsContains: "click",
+      startAt: 0,
+      maxResults: 25,
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://example.test/testcases/abc-123/versions/2/teststeps/search?startAt=0&maxResults=25"
+    );
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({
+      filter: { stepDetails: "~click" },
+    });
+  });
 });
 
 describe("QTM4JClient helper parsers", () => {

@@ -36,6 +36,9 @@ describe("createServer", () => {
         "search_test_case",
         "search_test_cases",
         "update_execution_status",
+        "update_test_case_description",
+        "update_test_case_step",
+        "update_test_case_summary",
       ].sort()
     );
   });

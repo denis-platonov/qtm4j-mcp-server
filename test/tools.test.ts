@@ -268,6 +268,36 @@ describe("createToolHandlers", () => {
 
     await expect(handlers.create_test_case({ summary: "Create me" })).rejects.toThrow("boom");
   });
+
+  it("returns an error when update_test_case_step has no step fields", async () => {
+    const { client, mocks } = createToolClientMock();
+    const handlers = createToolHandlers(client, 42);
+
+    const result = await handlers.update_test_case_step({
+      testCaseId: "1",
+      stepId: "99",
+    });
+
+    expect(mocks.updateTestCaseStep).not.toHaveBeenCalled();
+    expect(result).toEqual(
+      errorResult("Provide at least one of stepDetails, expectedResult, or testData")
+    );
+  });
+
+  it("forwards update_test_case_summary to the client", async () => {
+    const { client, mocks } = createToolClientMock();
+    mocks.updateTestCaseSummary.mockResolvedValue({ success: true });
+    const handlers = createToolHandlers(client, 42);
+
+    const result = await handlers.update_test_case_summary({
+      testCaseId: "PE26-TC-1",
+      versionNo: 2,
+      summary: "Updated",
+    });
+
+    expect(mocks.updateTestCaseSummary).toHaveBeenCalledWith("PE26-TC-1", 2, 42, "Updated");
+    expect(parseToolPayload(result)).toEqual({ success: true });
+  });
 });
 
 describe("registerQtm4jTools", () => {

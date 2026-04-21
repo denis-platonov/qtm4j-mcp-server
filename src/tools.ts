@@ -44,6 +44,26 @@ export interface QTM4JToolClient {
     addFolderIds?: number[],
     removeFolderIds?: number[]
   ): Promise<unknown>;
+  updateTestCaseSummary(
+    testCaseId: string,
+    versionNo: number,
+    projectId: number,
+    summary: string
+  ): Promise<unknown>;
+  updateTestCaseDescription(
+    testCaseId: string,
+    versionNo: number,
+    projectId: number,
+    description: string
+  ): Promise<unknown>;
+  updateTestCaseStep(
+    testCaseId: string,
+    versionNo: number,
+    projectId: number,
+    stepId: string,
+    fields: { stepDetails?: string; expectedResult?: string; testData?: string },
+    useLatestVersion?: boolean
+  ): Promise<unknown>;
   searchTestCaseSteps(params: {
     testCaseId: string;
     versionNo: number;
@@ -300,7 +320,8 @@ export const TOOL_DEFINITIONS = {
     }),
   },
   get_test_case_steps: {
-    description: "POST …/teststeps/search with pagination (startAt, maxResults max 100).",
+    description:
+      "POST …/teststeps/search (QTM4J GetTestStepRequest). Pagination: query startAt & maxResults (max 100). Body is {} to list all steps, or { filter: { stepDetails?, testData?, expectedResult? } } — no projectId in the filter. Optional sort is a query parameter.",
     parameters: (defaultProjectId?: number) => ({
       projectId: optionalProjectId(defaultProjectId),
       testCaseId: z.string().describe("Internal test case id"),
@@ -328,6 +349,43 @@ export const TOOL_DEFINITIONS = {
       testCaseId: z.string().describe("Internal id or key"),
       versionNo: z.number().optional().default(1),
       removeFolderIds: z.array(z.number()).min(1).describe("Folder ids to remove"),
+    }),
+  },
+  update_test_case_description: {
+    description:
+      "Update the description field on a test case version (PUT …/testcases/{id}/versions/{no} with description).",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      testCaseId: z.string().describe("Internal id or key"),
+      versionNo: z.number().optional().default(1),
+      description: z.string().describe("New description text"),
+    }),
+  },
+  update_test_case_step: {
+    description:
+      "Edit an existing test step (PUT …/versions/{v}/teststeps with a JSON array). stepId is the numeric id from get_test_case_steps. Provide at least one of stepDetails, expectedResult, testData.",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      testCaseId: z.string().describe("Internal id or key"),
+      versionNo: z.number().optional().default(1),
+      stepId: z.string().min(1).describe("Step id from test step search/list"),
+      stepDetails: z.string().optional().describe("Action / step text"),
+      expectedResult: z.string().optional(),
+      testData: z.string().optional(),
+      useLatestVersion: z
+        .boolean()
+        .optional()
+        .describe("If true, use /versions/latest/… in the path instead of versionNo"),
+    }),
+  },
+  update_test_case_summary: {
+    description:
+      "Update the summary (title) on a test case version (PUT …/testcases/{id}/versions/{no} with summary).",
+    parameters: (defaultProjectId?: number) => ({
+      projectId: optionalProjectId(defaultProjectId),
+      testCaseId: z.string().describe("Internal id or key"),
+      versionNo: z.number().optional().default(1),
+      summary: z.string().min(1).describe("New summary / title"),
     }),
   },
 } as const satisfies Record<string, ToolDefinition>;
@@ -647,6 +705,77 @@ export function createToolHandlers(
           pid,
           undefined,
           removeFolderIds as number[]
+        );
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
+    },
+    update_test_case_description: async ({ projectId, testCaseId, versionNo, description }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      const vNo = (versionNo as number | undefined) ?? 1;
+      try {
+        const data = await client.updateTestCaseDescription(
+          testCaseId as string,
+          vNo,
+          pid,
+          description as string
+        );
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
+    },
+    update_test_case_step: async ({
+      projectId,
+      testCaseId,
+      versionNo,
+      stepId,
+      stepDetails,
+      expectedResult,
+      testData,
+      useLatestVersion,
+    }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      const vNo = (versionNo as number | undefined) ?? 1;
+      const fields = {
+        stepDetails: stepDetails as string | undefined,
+        expectedResult: expectedResult as string | undefined,
+        testData: testData as string | undefined,
+      };
+      if (
+        fields.stepDetails === undefined &&
+        fields.expectedResult === undefined &&
+        fields.testData === undefined
+      ) {
+        return errorResult("Provide at least one of stepDetails, expectedResult, or testData");
+      }
+      try {
+        const data = await client.updateTestCaseStep(
+          testCaseId as string,
+          vNo,
+          pid,
+          stepId as string,
+          fields,
+          useLatestVersion as boolean | undefined
+        );
+        return textResult(data);
+      } catch (e) {
+        return errorResult(e instanceof Error ? e.message : String(e));
+      }
+    },
+    update_test_case_summary: async ({ projectId, testCaseId, versionNo, summary }) => {
+      const pid = requireProjectId(projectId, defaultProjectId);
+      if (typeof pid !== "number") return pid;
+      const vNo = (versionNo as number | undefined) ?? 1;
+      try {
+        const data = await client.updateTestCaseSummary(
+          testCaseId as string,
+          vNo,
+          pid,
+          summary as string
         );
         return textResult(data);
       } catch (e) {
